@@ -510,12 +510,25 @@
       // Pre-fetch stems and standalone BGMs in parallel.
       this.readyPromise = Promise.all([this._fetchStems(), this._fetchBgms()]);
 
-      // Warmup: on the visitor's first gesture (which always precedes the
-      // audio button click), spin up the AudioContext + decode all buffers
-      // in the background. By the time they tap play, the only remaining
-      // work is scheduling sources — the click→sound gap collapses from
-      // ~500 ms to ~110 ms so the song never feels like it's missing its head.
+      // Warmup: spin up the AudioContext + decode every buffer as early as
+      // possible. Decode happens on a suspended context (allowed on every
+      // browser we care about, including iOS 14+) so iOS-style gesture-gated
+      // resume is unaffected — only ctx.resume() needs a gesture, not the
+      // ctx construction or decodeAudioData call.
+      //
+      // Why eager rather than gesture-bound: Windows Chromium's FLAC decoder
+      // is software-only and takes 2–3 s for B_dawn.flac (~9.76 MB), versus
+      // Mac/iOS hardware-decoders that finish in ~200 ms. Waiting for the
+      // first pointerdown (which on Windows usually IS the audio-button
+      // click) means decode runs after the click and the song starts
+      // multiple seconds late. Kicking decode at page load moves that cost
+      // before any interaction so click→sound is dominated by 0.1 s of node
+      // scheduling regardless of platform.
       this._primePromise = null;
+      try { this._prime().catch(() => {}); } catch (_) {}
+      // Gesture fallback for the rare browser that refuses non-gestured
+      // AudioContext creation. Idempotent — repeat calls return the cached
+      // promise from the eager attempt above.
       const warmup = () => { this._prime().catch(() => {}); };
       document.addEventListener('pointerdown', warmup, { once: true, passive: true });
       document.addEventListener('keydown',     warmup, { once: true });
@@ -726,8 +739,15 @@
           try { await this.ctx.resume(); } catch (_) {}
         }
 
-        // Schedule all sources to start at the same ctx time = sample-accurate sync
+        // Schedule all sources to start at the same ctx time = sample-accurate sync.
+        // When the visitor lands on Page B directly (?scene=b URL or hot reload)
+        // and presses play, the stems-at-gain-1 default makes the BGM handoff
+        // duck them down from full volume — Page A's mix briefly leaks before
+        // BGM kicks in. Reading the current scene at play() time lets us
+        // pre-silence the stems so there is nothing to duck.
         if (this.stemSources.size === 0) {
+          const startSilent = document.body.dataset.scene === 'b';
+          const initialStemGain = startSilent ? 0 : 1.0;
           const startAt = this.ctx.currentTime + 0.1;
           for (const s of STEMS) {
             const buf = this.stemBuffers.get(s.id);
@@ -737,7 +757,7 @@
             src.loop = true;
             src.loopEnd = LOOP_END_S;
             const gain = this.ctx.createGain();
-            gain.gain.value = 1.0; // default = full original mix
+            gain.gain.value = initialStemGain;
             src.connect(gain).connect(this.stemsBus);
             src.start(startAt);
             this.stemSources.set(s.id, src);
@@ -1372,7 +1392,16 @@
     function startBgmHandoff() {
       if (bgmStarted) return;
       bgmStarted = true;
-      audioPlayer.fadeAllStems(0, STEM_DUCK_MS);
+      // If the stems are already silent — visitor pressed play on Page B
+      // without ever being on A — there is nothing to duck and the breath
+      // would just be dead air for them. Go straight to BGM in that case.
+      let stemsAudible = false;
+      for (const g of audioPlayer.stemGains.values()) {
+        if (g.gain.value > 0.001) { stemsAudible = true; break; }
+      }
+      const duckMs = stemsAudible ? STEM_DUCK_MS : 0;
+      const delayMs = stemsAudible ? (STEM_DUCK_MS + BREATH_MS) : 0;
+      if (stemsAudible) audioPlayer.fadeAllStems(0, duckMs);
       bgmStartTimer = setTimeout(async () => {
         bgmStartTimer = null;
         // Slower (Windows) FLAC decoders can still be working on B_dawn when
@@ -1385,7 +1414,7 @@
         // returned to A while we were waiting on decode, abort.
         if (!bgmStarted) return;
         audioPlayer.playBgm('b', { fadeMs: BGM_FADEIN_MS, volume: 1.0 });
-      }, STEM_DUCK_MS + BREATH_MS);
+      }, delayMs);
     }
 
     return {
@@ -1433,6 +1462,15 @@
 
         if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
         if (waveRaf) { cancelAnimationFrame(waveRaf); waveRaf = null; }
+        // Reset the wave canvas so the next mount rebuilds the 2D context
+        // from scratch. Without this, A→B→A→B inherits the first mount's
+        // ctx + scaled transform; if layout dims shift between visits
+        // (sticky reflow, scrollbar appearance, URL bar) the cached scale
+        // no longer matches the canvas backing store and the line draws
+        // offset / skewed for a few frames before resize catches up.
+        if (waveCanvas) { waveCanvas.width = 0; waveCanvas.height = 0; }
+        waveCtx = null;
+        waveData = null;
         if (observer) { observer.disconnect(); observer = null; }
         if (bgmStartTimer) { clearTimeout(bgmStartTimer); bgmStartTimer = null; }
         if (waveResizeListener) {
