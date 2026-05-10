@@ -34,12 +34,33 @@
      never breaks during scene transitions.
      ============================================ */
   const STEMS = [
-    { id: 'main-gt',   file: 'stems/Main Gt.flac',    pos: [0.50, 0.13] },  // 北 (melody)
-    { id: 'synth-gt',  file: 'stems/Synth Gt.flac',   pos: [0.78, 0.25] },  // 右上
-    { id: 'synth-pad', file: 'stems/Synth PAD.flac',  pos: [0.88, 0.50] },  // 右
-    { id: 'drums',     file: 'stems/Dr.flac',         pos: [0.50, 0.87] },  // 真南
-    { id: 'bass',      file: 'stems/Bass.flac',       pos: [0.12, 0.50] },  // 左
+    { id: 'main-gt',   file: '/api/audio/Main Gt.flac',    pos: [0.50, 0.13] },  // 北 (melody)
+    { id: 'synth-gt',  file: '/api/audio/Synth Gt.flac',   pos: [0.78, 0.25] },  // 右上
+    { id: 'synth-pad', file: '/api/audio/Synth PAD.flac',  pos: [0.88, 0.50] },  // 右
+    { id: 'drums',     file: '/api/audio/Dr.flac',         pos: [0.50, 0.87] },  // 真南
+    { id: 'bass',      file: '/api/audio/Bass.flac',       pos: [0.12, 0.50] },  // 左
   ];
+
+  // Pairs with the same key in functions/api/audio/[file].js — bytes coming
+  // out of /api/audio are AES-GCM ciphertext (12-byte IV prepended). Network-tab
+  // capture yields gibberish without this key.
+  const STREAM_KEY_B64 = 'k7Vs1GXZCawdoMaYFDtGCH/umDLu/VF1Qm5IKIJPQqY=';
+  let _streamKey = null;
+  async function _getStreamKey() {
+    if (_streamKey) return _streamKey;
+    const raw = Uint8Array.from(atob(STREAM_KEY_B64), c => c.charCodeAt(0));
+    _streamKey = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
+    return _streamKey;
+  }
+  async function fetchStream(url) {
+    const res = await fetch(encodeURI(url));
+    if (!res.ok) throw new Error('fetch failed: ' + url);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const iv = buf.subarray(0, 12);
+    const cipher = buf.subarray(12);
+    const key = await _getStreamKey();
+    return await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
+  }
 
   /* ============================================
      PARTICLE WORKER — OffscreenCanvas
@@ -538,9 +559,7 @@
     async _fetchStems() {
       try {
         await Promise.all(STEMS.map(async (s) => {
-          const res = await fetch(encodeURI(s.file));
-          if (!res.ok) throw new Error('fetch failed: ' + s.file);
-          const ab = await res.arrayBuffer();
+          const ab = await fetchStream(s.file);
           this._stemArrayBuffers.set(s.id, ab);
         }));
       } catch (e) {
