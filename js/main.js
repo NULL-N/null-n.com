@@ -735,6 +735,7 @@
             const src = this.ctx.createBufferSource();
             src.buffer = buf;
             src.loop = true;
+            src.loopEnd = LOOP_END_S;
             const gain = this.ctx.createGain();
             gain.gain.value = 1.0; // default = full original mix
             src.connect(gain).connect(this.stemsBus);
@@ -832,6 +833,7 @@
       const src = this.ctx.createBufferSource();
       src.buffer = buf;
       src.loop = true;
+      src.loopEnd = LOOP_END_S;
       const gain = this.ctx.createGain();
       gain.gain.value = 0;
       src.connect(gain).connect(this.master);
@@ -1353,8 +1355,10 @@
     let waveResizeListener = null;
 
     function setupObserver() {
+      // Footer is intentionally not observed — see the CSS comment above
+      // .b-service reveal styles. It must render unconditionally.
       if (!('IntersectionObserver' in window)) {
-        root.querySelectorAll('.b-service, .b-capabilities, .b-footer').forEach(el => el.classList.add('in-view'));
+        root.querySelectorAll('.b-service, .b-capabilities').forEach(el => el.classList.add('in-view'));
         return;
       }
       observer = new IntersectionObserver((entries) => {
@@ -1362,7 +1366,7 @@
           if (entry.isIntersecting) entry.target.classList.add('in-view');
         });
       }, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' });
-      root.querySelectorAll('.b-service, .b-capabilities, .b-footer').forEach(el => observer.observe(el));
+      root.querySelectorAll('.b-service, .b-capabilities').forEach(el => observer.observe(el));
     }
 
     function startBgmHandoff() {

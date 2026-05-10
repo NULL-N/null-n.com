@@ -487,7 +487,10 @@ body[data-scene="b"] .cursor-ring {
    ============================================ */
 .scene-toggle {
   position: fixed;
-  top: max(1.25rem, env(safe-area-inset-top));
+  /* Vertical center sits at 2rem from top so it aligns with .b-nav's content
+     center (nav height 4rem → center 2rem). Toggle is 38px tall, so top =
+     32 − 19 = 13px. Notch on iOS still wins via env(). */
+  top: max(13px, env(safe-area-inset-top));
   right: max(1.5rem, env(safe-area-inset-right));
   z-index: 7000;
   display: flex;
@@ -555,9 +558,17 @@ body[data-scene="b"] .scene-toggle button[aria-pressed="true"] {
   top: 0;
   display: flex;
   justify-content: flex-start;
-  align-items: baseline;
+  /* center (not baseline) so the serif logo, mono status, and the fixed
+     scene-toggle on the right all share the same visual horizontal line.
+     Baseline alignment was making the serif logo float above the mono
+     status because the two have very different cap-heights. */
+  align-items: center;
   gap: 1.25rem;
-  padding: 1.25rem 2rem;
+  /* Fixed height anchors the scene-toggle's top calculation — both share a
+     known center y = 2rem from page top. Vertical padding lives inside this
+     box so it does not push the total height. */
+  height: 4rem;
+  padding: 0 2rem;
   /* iPhone landscape: notch / dynamic island sits in safe-area-inset-left
      and the scene-toggle parks in safe-area-inset-right — both must be
      respected so the logo + JST status never get clipped by the bezel. */
@@ -583,10 +594,12 @@ body[data-scene="b"] .scene-toggle button[aria-pressed="true"] {
   color: rgba(10, 10, 15, 0.55);
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  /* Subtle vertical line between logo and status for editorial rhythm */
+  /* Subtle vertical line between logo and status for editorial rhythm.
+     Explicit height (was align-self: stretch) so the separator stays a
+     bounded editorial mark instead of growing to the full 4rem nav height. */
   padding-left: 1.25rem;
   border-left: 1px solid rgba(10, 10, 15, 0.12);
-  align-self: stretch;
+  height: 1.75rem;
 }
 .b-status-dot {
   width: 6px;
@@ -604,7 +617,7 @@ body[data-scene="b"] .scene-toggle button[aria-pressed="true"] {
 /* --- Live audio waveform line under nav --- */
 .b-wave {
   position: sticky;
-  top: 60px;
+  top: 4rem;
   width: 100%;
   height: 28px;
   display: block;
@@ -734,6 +747,12 @@ body[data-scene="b"] .scene-toggle button[aria-pressed="true"] {
   padding: 2.5rem 2rem 3rem;
   padding-left:  max(2rem, env(safe-area-inset-left));
   padding-right: max(2rem, env(safe-area-inset-right));
+  /* Bottom padding lifts the caption so its vertical center sits at the same
+     y from viewport bottom as the .audio-ctrl waveform center — they become
+     one horizontal axis when the user has scrolled to the bottom of Page B.
+     Desktop audio-ctrl: bottom max(2rem, env) + half-height 54px → center
+     ≈ 86px. Caption content half ≈ 5.5px → padding-bottom needs ≈ 80.5px. */
+  padding-bottom: max(5rem, calc(env(safe-area-inset-bottom) + 3rem));
   display: flex;
   justify-content: center;
   align-items: center;
@@ -749,26 +768,39 @@ body[data-scene="b"] .scene-toggle button[aria-pressed="true"] {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  /* line-height: 1 collapses the children's line-boxes to their actual glyph
+     heights so align-items: center lands on the visual center instead of the
+     line-box center — needed to make the bar sit on the same horizontal axis
+     as the uppercase ©NULL-N ORIGINAL caption. */
+  line-height: 1;
 }
 .b-pulse {
-  color: #1e40af;
+  /* Rendered as a CSS rectangle (was the ▍ U+258F glyph). The glyph's bounds
+     differ from uppercase letters in most monospace fonts, leaving a visible
+     vertical offset against ©NULL-N ORIGINAL. A pixel-sized box gives exact
+     control: height matches the cap-height of the 0.6875rem caption. */
+  display: inline-block;
+  width: 3px;
+  height: 0.6875rem;
+  background: #1e40af;
   opacity: var(--b-pulse, 0.3);
   transition: opacity 0.08s linear;
-  font-family: var(--font-mono);
 }
 
-/* --- Stagger reveal on scroll --- */
+/* --- Stagger reveal on scroll ---
+   Footer intentionally excluded: it sits at the page bottom and the taller
+   bottom-padding (alignment with .audio-ctrl) pushed it past the negative-
+   rootMargin trigger window on short Windows viewports, leaving the
+   copyright line at opacity 0. Always-visible footer is the safe default. */
 @media (prefers-reduced-motion: no-preference) {
   body[data-scene="b"] .b-service,
-  body[data-scene="b"] .b-capabilities,
-  body[data-scene="b"] .b-footer {
+  body[data-scene="b"] .b-capabilities {
     opacity: 0;
     transform: translateY(24px);
     transition: opacity 0.7s var(--ease-out-expo), transform 0.7s var(--ease-out-expo);
   }
   body[data-scene="b"] .b-service.in-view,
-  body[data-scene="b"] .b-capabilities.in-view,
-  body[data-scene="b"] .b-footer.in-view {
+  body[data-scene="b"] .b-capabilities.in-view {
     opacity: 1;
     transform: translateY(0);
   }
@@ -779,7 +811,17 @@ body[data-scene="b"] .scene-toggle button[aria-pressed="true"] {
   .b-service { padding: 3rem 0; }
   .b-hero { padding: 5rem 1.5rem 5rem; }
   .b-services, .b-capabilities, .b-footer { padding-left: 1.5rem; padding-right: 1.5rem; }
-  .b-nav { padding: 1rem 1.5rem; }
+  .b-nav { padding: 0 1.5rem; }
+  /* Mobile: audio-ctrl shrinks to 76px wave (88px total) and bottom 1.5rem,
+     so its center y ≈ max(1.5rem, env(bottom)) + 44px. Footer caption center
+     needs to land there: padding-bottom ≈ that y − 5.5px ≈ env(bottom) + 38.5px. */
+  .b-footer { padding-bottom: max(4rem, calc(env(safe-area-inset-bottom) + 2.5rem)); }
+}
+/* Landscape mobile: audio-ctrl shrinks again to 56px wave (68px total) and
+   bottom 1rem → center y ≈ max(1rem, env(bottom)) + 34px. Lift caption to
+   match: padding-bottom ≈ that y − 5.5px. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .b-footer { padding-bottom: max(2.75rem, calc(env(safe-area-inset-bottom) + 1.75rem)); }
 }
 
 /* ============================================
