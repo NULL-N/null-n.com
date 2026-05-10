@@ -748,11 +748,13 @@ body[data-scene="b"] .scene-toggle button[aria-pressed="true"] {
   padding-left:  max(2rem, env(safe-area-inset-left));
   padding-right: max(2rem, env(safe-area-inset-right));
   /* Bottom padding lifts the caption so its vertical center sits at the same
-     y from viewport bottom as the .audio-ctrl waveform center — they become
-     one horizontal axis when the user has scrolled to the bottom of Page B.
-     Desktop audio-ctrl: bottom max(2rem, env) + half-height 54px → center
-     ≈ 86px. Caption content half ≈ 5.5px → padding-bottom needs ≈ 80.5px. */
-  padding-bottom: max(5rem, calc(env(safe-area-inset-bottom) + 3rem));
+     y from viewport bottom as the .audio-ctrl waveform center — they share
+     one horizontal axis when scrolled to the bottom of Page B.
+     Desktop audio-ctrl: bottom max(32px, env) + half-height 54px → center
+     at (32|env)+54. Caption is 11px tall (line-height:1), half = 5.5px.
+     Want: padding-bottom + 5.5 = (32|env) + 54 → padding-bottom = (32|env) + 48.5.
+     Stated in px for sub-pixel-exact alignment across env() values. */
+  padding-bottom: max(80.5px, calc(env(safe-area-inset-bottom) + 48.5px));
   display: flex;
   justify-content: center;
   align-items: center;
@@ -812,16 +814,15 @@ body[data-scene="b"] .scene-toggle button[aria-pressed="true"] {
   .b-hero { padding: 5rem 1.5rem 5rem; }
   .b-services, .b-capabilities, .b-footer { padding-left: 1.5rem; padding-right: 1.5rem; }
   .b-nav { padding: 0 1.5rem; }
-  /* Mobile: audio-ctrl shrinks to 76px wave (88px total) and bottom 1.5rem,
-     so its center y ≈ max(1.5rem, env(bottom)) + 44px. Footer caption center
-     needs to land there: padding-bottom ≈ that y − 5.5px ≈ env(bottom) + 38.5px. */
-  .b-footer { padding-bottom: max(4rem, calc(env(safe-area-inset-bottom) + 2.5rem)); }
+  /* Mobile: audio-ctrl is 76px wave (88px total) and bottom max(24px, env).
+     Its center y = (24|env) + 44. Caption half = 5.5, so we need
+     padding-bottom = (24|env) + 38.5. Stated in px for sub-pixel alignment. */
+  .b-footer { padding-bottom: max(62.5px, calc(env(safe-area-inset-bottom) + 38.5px)); }
 }
-/* Landscape mobile: audio-ctrl shrinks again to 56px wave (68px total) and
-   bottom 1rem → center y ≈ max(1rem, env(bottom)) + 34px. Lift caption to
-   match: padding-bottom ≈ that y − 5.5px. */
+/* Landscape mobile: audio-ctrl is 56px wave (68px total) and bottom
+   max(16px, env). Center y = (16|env) + 34. padding-bottom = (16|env) + 28.5. */
 @media (max-height: 480px) and (orientation: landscape) {
-  .b-footer { padding-bottom: max(2.75rem, calc(env(safe-area-inset-bottom) + 1.75rem)); }
+  .b-footer { padding-bottom: max(44.5px, calc(env(safe-area-inset-bottom) + 28.5px)); }
 }
 
 /* ============================================

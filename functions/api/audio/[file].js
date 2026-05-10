@@ -37,11 +37,26 @@ export async function onRequest({ request, env, params }) {
   if (!okay && referer) {
     try { okay = isAllowed(new URL(referer).origin); } catch (_) {}
   }
-  if (!okay) return new Response('Forbidden', { status: 403 });
+  // Defense in depth around the Origin/Referer gate:
+  // - 403 / 404 responses must NOT be cached (no-store) so a Forbidden
+  //   can't be served to a later legitimate visitor on the same URL.
+  // - 200 responses use Cache-Control: private — earlier `public, max-age`
+  //   let Cloudflare edge cache the audio for 24 h, after which a single
+  //   legitimate fetch populated the cache and any subsequent request
+  //   (Origin-less curl, anyone) hit the cache without going through this
+  //   Function, effectively bypassing the gate for the cache window.
+  //   Browser cache still works (private). Vary: Origin is belt-and-braces.
+  if (!okay) return new Response('Forbidden', {
+    status: 403,
+    headers: { 'Cache-Control': 'no-store' },
+  });
 
   const key = decodeURIComponent(params.file);
   const obj = await env.AUDIO_BUCKET.get(key);
-  if (!obj) return new Response('Not found', { status: 404 });
+  if (!obj) return new Response('Not found', {
+    status: 404,
+    headers: { 'Cache-Control': 'no-store' },
+  });
 
   const plain = await obj.arrayBuffer();
   const cryptoKey = await getEncryptKey();
@@ -56,7 +71,8 @@ export async function onRequest({ request, env, params }) {
     headers: {
       'Content-Type': 'application/octet-stream',
       'Content-Length': String(out.byteLength),
-      'Cache-Control': 'public, max-age=86400',
+      'Cache-Control': 'private, max-age=86400',
+      'Vary': 'Origin',
     },
   });
 }
