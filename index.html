@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>NULL-N | Art × AI × Engineering</title>
-  <meta name="description" content="NULL-N — Art × AI × Engineering の交差点で創造するエンジニアのポートフォリオ。">
+  <title>NULL-N | Sound × AI × Engineering</title>
+  <meta name="description" content="NULL-N — Sound × AI × Engineering の交差点で創造するエンジニアのポートフォリオ。">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="theme-color" content="#0a0a0f">
   <meta name="color-scheme" content="dark">
@@ -13,8 +13,8 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="NULL-N">
-  <meta property="og:title" content="NULL-N | Art × AI × Engineering">
-  <meta property="og:description" content="Art × AI × Engineering の交差点で創造するエンジニアのポートフォリオ。">
+  <meta property="og:title" content="NULL-N | Sound × AI × Engineering">
+  <meta property="og:description" content="Sound × AI × Engineering の交差点で創造するエンジニアのポートフォリオ。">
   <meta property="og:url" content="https://null-n.com/">
   <meta property="og:locale" content="ja_JP">
   <meta property="og:image" content="https://null-n.com/og-image.png">
@@ -23,8 +23,8 @@
 
   <!-- X / Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="NULL-N | Art × AI × Engineering">
-  <meta name="twitter:description" content="Art × AI × Engineering の交差点で創造するエンジニアのポートフォリオ。">
+  <meta name="twitter:title" content="NULL-N | Sound × AI × Engineering">
+  <meta name="twitter:description" content="Sound × AI × Engineering の交差点で創造するエンジニアのポートフォリオ。">
   <meta name="twitter:image" content="https://null-n.com/og-image.png">
 
   <!-- Favicon & Icons -->
@@ -52,14 +52,14 @@
       "sameAs": [
         "https://github.com/NULL-N"
       ],
-      "knowsAbout": ["Art", "Artificial Intelligence", "Software Engineering"],
+      "knowsAbout": ["Sound", "Artificial Intelligence", "Software Engineering"],
       "jobTitle": "Engineer"
     },
-    "dateModified": "2026-05-09"
+    "dateModified": "2026-05-11"
   }
   </script>
 </head>
-<body>
+<body data-scene="a">
 
   <!-- ========== CURSOR ========== -->
   <div class="cursor-dot" aria-hidden="true"></div>
@@ -81,7 +81,13 @@
   <!-- ========== CANVAS ========== -->
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
 
-  <!-- ========== MAIN — single page; playground reveals after first interaction ========== -->
+  <!-- ========== SCENE TOGGLE ========== -->
+  <nav class="scene-toggle" aria-label="Scene" data-no-scene-tap>
+    <button type="button" data-scene-target="a" aria-pressed="true" data-magnetic>A</button>
+    <button type="button" data-scene-target="b" aria-pressed="false" data-magnetic>B</button>
+  </nav>
+
+  <!-- ========== SCENE A — hero + playground (current) ========== -->
   <main class="scene scene-a" id="scene-a">
     <section id="hero" class="section hero">
       <div class="hero-content">
@@ -105,9 +111,63 @@
     <div class="b-crosshair" aria-hidden="true"></div>
     <div class="b-lock-marker" aria-hidden="true"></div>
 
-    <a href="https://github.com/NULL-N" class="github-link" target="_blank" rel="noopener" aria-label="GitHub" data-magnetic data-no-scene-tap>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-    </a>
+  </main>
+
+  <!-- ========== SCENE B — editorial "studio brief" ========== -->
+  <main class="scene scene-b" id="scene-b" hidden>
+    <header class="b-nav">
+      <span class="b-logo">NULL-N</span>
+      <span class="b-status">
+        <span class="b-status-dot" aria-hidden="true"></span>
+        <span>Tokyo&nbsp;<span id="b-time">—</span>&nbsp;JST</span>
+      </span>
+    </header>
+
+    <!-- Live 1px audio-reactive waveform under nav -->
+    <canvas class="b-wave" id="b-wave" aria-hidden="true"></canvas>
+
+    <section class="b-hero">
+      <p class="b-eyebrow">STUDIO · NULL-N</p>
+      <h1 class="b-headline">
+        Sound <span class="b-x">×</span> AI<br>
+        <span class="b-x">×</span> Engineering<span class="b-period">.</span>
+      </h1>
+      <p class="b-sub">創造的な技術と、続く伴走を。</p>
+    </section>
+
+    <section class="b-services">
+      <article class="b-service">
+        <h3>Sound</h3>
+        <p>楽曲制作と声の表現。</p>
+      </article>
+      <article class="b-service">
+        <h3>AI</h3>
+        <p>感情に寄り添う音声 AI を、ゼロから形に。<br>試作から運用まで、伴走します。</p>
+      </article>
+      <article class="b-service">
+        <h3>Engineering</h3>
+        <p>音・光・動きを、Web で形に。<br>納品で終わらず、伴走します。</p>
+      </article>
+    </section>
+
+    <section class="b-capabilities" id="capabilities">
+      <h2>Direction</h2>
+      <ul class="b-stack">
+        <li>HTML / CSS</li>
+        <li>JavaScript</li>
+        <li>TypeScript</li>
+        <li>Node.js</li>
+        <li>Python</li>
+        <li>SQL</li>
+      </ul>
+    </section>
+
+    <footer class="b-footer">
+      <span class="b-now-playing">
+        <span class="b-pulse" aria-hidden="true">▍</span>
+        <span>©NULL-N Original</span>
+      </span>
+    </footer>
   </main>
 
   <!-- ========== NOSCRIPT ========== -->

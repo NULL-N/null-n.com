@@ -444,3 +444,330 @@ body.locked .b-crosshair::after {
     display: none;
   }
 }
+
+/* ============================================
+   SCENE SCOPING — only the active scene renders. SceneManager swaps
+   `body[data-scene]` on transition; the matching #scene-X displays.
+   ============================================ */
+.scene { display: none; }
+body[data-scene="a"] #scene-a { display: block; }
+body[data-scene="b"] #scene-b { display: block; }
+
+/* Scene B = formal mode. Cosmic shader / noise / custom cursor stand
+   down so the page reads as a calm, professional document. */
+body[data-scene="b"] {
+  cursor: auto;
+  overflow: auto;
+  background: #fafafa;
+  color: #0a0a0f;
+}
+body[data-scene="b"] button,
+body[data-scene="b"] a { cursor: pointer; }
+body[data-scene="b"] #bg-canvas,
+body[data-scene="b"] .noise-svg,
+body[data-scene="b"] .cursor-dot,
+body[data-scene="b"] .cursor-ring {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+/* ============================================
+   SCENE TOGGLE — persistent A/B switch, top-right. Glass pill that
+   adapts its theme to the active scene (dark blur on A, light on B).
+   ============================================ */
+.scene-toggle {
+  position: fixed;
+  top: max(1.25rem, env(safe-area-inset-top));
+  right: max(1.5rem, env(safe-area-inset-right));
+  z-index: 7000;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(20, 20, 30, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background 0.4s ease, border-color 0.4s ease;
+}
+.scene-toggle button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: rgba(228, 228, 238, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  width: 2.25rem;
+  height: 1.875rem;
+  border-radius: 999px;
+  transition: color 0.25s, background 0.25s;
+}
+.scene-toggle button:hover { color: var(--text-primary); }
+.scene-toggle button[aria-pressed="true"] {
+  color: var(--accent-1);
+  background: rgba(0, 255, 170, 0.12);
+}
+body[data-scene="b"] .scene-toggle {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(10, 10, 15, 0.08);
+}
+body[data-scene="b"] .scene-toggle button {
+  color: rgba(10, 10, 15, 0.45);
+}
+body[data-scene="b"] .scene-toggle button:hover { color: rgba(10, 10, 15, 0.9); }
+body[data-scene="b"] .scene-toggle button[aria-pressed="true"] {
+  color: #1e40af;
+  background: rgba(30, 64, 175, 0.1);
+}
+
+/* ============================================
+   SCENE B — editorial "studio brief". Calm, formal page that breathes
+   with the BGM. Layout: max-width 1080 centered, generous whitespace,
+   Noto Serif JP for the dramatic moments, single navy accent.
+   No CTAs, no contact path — the work is the entire statement.
+   ============================================ */
+.scene-b {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  background: #fafaf6;
+  color: #0a0a0f;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Sticky nav: logo + live JST status (both left-grouped so the
+   floating scene-toggle on the top-right has unobstructed real estate) --- */
+.b-nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: flex-start;
+  align-items: baseline;
+  gap: 1.25rem;
+  padding: 1.25rem 2rem;
+  /* Reserve room on the right so the scene-toggle never crowds nav content */
+  padding-right: max(8rem, env(safe-area-inset-right));
+  background: rgba(250, 250, 246, 0.85);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  z-index: 10;
+}
+.b-logo {
+  font-family: 'Noto Serif JP', serif;
+  font-weight: 700;
+  font-size: 1.125rem;
+  letter-spacing: 0.04em;
+}
+.b-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: rgba(10, 10, 15, 0.55);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  /* Subtle vertical line between logo and status for editorial rhythm */
+  padding-left: 1.25rem;
+  border-left: 1px solid rgba(10, 10, 15, 0.12);
+  align-self: stretch;
+}
+.b-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1e40af;
+  box-shadow: 0 0 8px rgba(30, 64, 175, 0.45);
+  animation: b-pulse-dot 2.6s ease-in-out infinite;
+}
+@keyframes b-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* --- Live audio waveform line under nav --- */
+.b-wave {
+  position: sticky;
+  top: 60px;
+  width: 100%;
+  height: 28px;
+  display: block;
+  z-index: 9;
+  pointer-events: none;
+}
+
+/* --- Hero --- */
+.b-hero {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 7rem 2rem 7rem;
+}
+.b-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 15, 0.4);
+  margin-bottom: 2.5rem;
+}
+.b-headline {
+  font-family: 'Noto Serif JP', serif;
+  font-weight: 700;
+  font-size: clamp(2.75rem, 8.5vw, 6.75rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.b-x {
+  font-weight: 500;
+  color: rgba(10, 10, 15, 0.5);
+  font-size: 0.85em;
+  display: inline-block;
+  margin: 0 0.05em;
+  transition: transform 0.6s var(--ease-out-expo), color 0.6s ease;
+}
+.b-period {
+  color: #1e40af;
+}
+.b-sub {
+  margin-top: 3rem;
+  font-size: clamp(1rem, 1.35vw, 1.125rem);
+  line-height: 1.75;
+  color: rgba(10, 10, 15, 0.7);
+  max-width: 36rem;
+}
+
+/* --- Services as numbered editorial blocks --- */
+.b-services {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  border-top: 1px solid var(--b-divider, #e6e6ec);
+  transition: border-color 0.2s ease;
+}
+.b-service {
+  padding: 4rem 0;
+  border-bottom: 1px solid var(--b-divider, #e6e6ec);
+  transition: border-color 0.2s ease;
+}
+.b-service:last-child {
+  border-bottom: none;
+}
+.b-service h3 {
+  font-family: 'Noto Serif JP', serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 4.5vw, 3.25rem);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  margin-bottom: 1.25rem;
+}
+.b-service p {
+  font-size: clamp(0.9375rem, 1.3vw, 1.0625rem);
+  line-height: 1.85;
+  color: rgba(10, 10, 15, 0.7);
+  max-width: 36rem;
+}
+
+/* --- Capabilities --- */
+.b-capabilities {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 5rem 2rem;
+  border-top: 1px solid var(--b-divider, #e6e6ec);
+  transition: border-color 0.2s ease;
+}
+.b-capabilities h2 {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.6875rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 15, 0.4);
+  margin-bottom: 2.5rem;
+}
+.b-stack {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.b-stack li {
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(10, 10, 15, 0.1);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: rgba(10, 10, 15, 0.7);
+  transition: border-color 0.2s, color 0.2s;
+}
+.b-stack li:hover {
+  border-color: rgba(10, 10, 15, 0.35);
+  color: rgba(10, 10, 15, 0.95);
+}
+
+/* --- Footer --- */
+.b-footer {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 3rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-top: 1px solid var(--b-divider, #e6e6ec);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: rgba(10, 10, 15, 0.5);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transition: border-color 0.2s ease;
+}
+.b-now-playing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.b-pulse {
+  color: #1e40af;
+  opacity: var(--b-pulse, 0.3);
+  transition: opacity 0.08s linear;
+  font-family: var(--font-mono);
+}
+
+/* --- Stagger reveal on scroll --- */
+@media (prefers-reduced-motion: no-preference) {
+  body[data-scene="b"] .b-service,
+  body[data-scene="b"] .b-capabilities,
+  body[data-scene="b"] .b-footer {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.7s var(--ease-out-expo), transform 0.7s var(--ease-out-expo);
+  }
+  body[data-scene="b"] .b-service.in-view,
+  body[data-scene="b"] .b-capabilities.in-view,
+  body[data-scene="b"] .b-footer.in-view {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Mobile adjustments --- */
+@media (max-width: 640px) {
+  .b-service { padding: 3rem 0; }
+  .b-hero { padding: 5rem 1.5rem 5rem; }
+  .b-services, .b-capabilities, .b-footer { padding-left: 1.5rem; padding-right: 1.5rem; }
+  .b-nav { padding: 1rem 1.5rem; }
+}
+
+/* ============================================
+   VIEW TRANSITION — A↔B crossfade. Skips on prefers-reduced-motion
+   (handled in SceneManager).
+   ============================================ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.55s;
+  animation-timing-function: var(--ease-out-expo);
+}

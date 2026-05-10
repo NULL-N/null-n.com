@@ -8,12 +8,12 @@
     cursor: { lerp: 0.18, ringLerp: 0.1 },
     typing: {
       phrases: [
-        'Art × AI × Engineering_',
-        'Art × AI × Engineering_',
+        'Sound × AI × Engineering_',
+        'Sound × AI × Engineering_',
         'Music ©NULL-N. Not AI._',
-        'Art × AI × Engineering_',
-        'Art × AI × Engineering_',
-        'Art × AI × Engineering_',
+        'Sound × AI × Engineering_',
+        'Sound × AI × Engineering_',
+        'Sound × AI × Engineering_',
         'If you remember the name, I\'ve already won._',
       ],
       speed: 60,
@@ -34,12 +34,23 @@
      never breaks during scene transitions.
      ============================================ */
   const STEMS = [
-    { id: 'main-gt',   file: '/api/audio/Main Gt.flac',    pos: [0.50, 0.13] },  // 北 (melody)
+    { id: 'main-gt',   file: '/api/audio/Main Gt.flac',    pos: [0.42, 0.13] },  // 北 (melody)
     { id: 'synth-gt',  file: '/api/audio/Synth Gt.flac',   pos: [0.78, 0.25] },  // 右上
     { id: 'synth-pad', file: '/api/audio/Synth PAD.flac',  pos: [0.88, 0.50] },  // 右
     { id: 'drums',     file: '/api/audio/Dr.flac',         pos: [0.50, 0.87] },  // 真南
     { id: 'bass',      file: '/api/audio/Bass.flac',       pos: [0.12, 0.50] },  // 左
   ];
+
+  // Standalone BGM tracks (single mixdown per id), used by scenes that
+  // want their own atmosphere instead of riding on the stem mix.
+  const BGM_TRACKS = [
+    { id: 'b', file: '/api/audio/B_dawn.flac' },
+  ];
+
+  // Both A stems and B_dawn are rendered with ~2 s of trailing decay past the
+  // musical end. Loop at exactly 60 s so the dead-zone never plays — clean
+  // 1-minute repetition. Buffers are longer than this so the cut is safe.
+  const LOOP_END_S = 60.0;
 
   // Pairs with the same key in functions/api/audio/[file].js — bytes coming
   // out of /api/audio are AES-GCM ciphertext (12-byte IV prepended). Network-tab
@@ -52,7 +63,18 @@
     _streamKey = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
     return _streamKey;
   }
+  // Local dev (localhost / 127.x / file://) has no Pages Function — bypass
+  // the /api/audio gate and pull straight from the on-disk stems/ folder.
+  // Production keeps the AES-GCM + Origin-gated path.
+  const IS_LOCAL = location.protocol === 'file:'
+    || /^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(location.hostname);
   async function fetchStream(url) {
+    if (IS_LOCAL) {
+      const localUrl = url.replace('/api/audio/', 'stems/');
+      const res = await fetch(encodeURI(localUrl));
+      if (!res.ok) throw new Error('fetch failed: ' + localUrl);
+      return await res.arrayBuffer();
+    }
     const res = await fetch(encodeURI(url));
     if (!res.ok) throw new Error('fetch failed: ' + url);
     const buf = new Uint8Array(await res.arrayBuffer());
@@ -472,6 +494,12 @@
       this.stemSources       = new Map(); // id -> AudioBufferSourceNode (created at play)
       this.stemGains         = new Map(); // id -> GainNode (per-stem volume)
 
+      // Standalone BGM state (single mixdown tracks scenes can fade to/from)
+      this._bgmArrayBuffers = new Map();
+      this.bgmBuffers       = new Map();
+      this.bgmSources       = new Map();
+      this.bgmGains         = new Map();
+
       // SE (one-shot sound effects) — mixed alongside stems but never routed
       // through the analyser so SE doesn't influence the BGM visualizer.
       this._sePending = new Map();
@@ -479,8 +507,19 @@
 
       this.btn.addEventListener('click', () => this.toggle());
 
-      // Pre-fetch all 5 stem files in parallel (no decoding until ctx exists).
-      this.readyPromise = this._fetchStems();
+      // Pre-fetch stems and standalone BGMs in parallel.
+      this.readyPromise = Promise.all([this._fetchStems(), this._fetchBgms()]);
+
+      // Warmup: on the visitor's first gesture (which always precedes the
+      // audio button click), spin up the AudioContext + decode all buffers
+      // in the background. By the time they tap play, the only remaining
+      // work is scheduling sources — the click→sound gap collapses from
+      // ~500 ms to ~110 ms so the song never feels like it's missing its head.
+      this._primePromise = null;
+      const warmup = () => { this._prime().catch(() => {}); };
+      document.addEventListener('pointerdown', warmup, { once: true, passive: true });
+      document.addEventListener('keydown',     warmup, { once: true });
+      document.addEventListener('touchstart',  warmup, { once: true, passive: true });
     }
 
     /**
@@ -567,54 +606,115 @@
       }
     }
 
+    async _fetchBgms() {
+      try {
+        await Promise.all(BGM_TRACKS.map(async (b) => {
+          const ab = await fetchStream(b.file);
+          this._bgmArrayBuffers.set(b.id, ab);
+        }));
+      } catch (e) {
+        console.warn('BGM fetch failed', e);
+      }
+    }
+
+    /**
+     * Idempotent warmup: create the AudioContext (synchronously, so iOS
+     * Safari accepts the gesture) and decode every stem + BGM buffer.
+     * Resume is intentionally NOT called here — that needs a fresher gesture
+     * stack and is left to play(). Repeated calls return the cached promise.
+     */
+    _prime() {
+      if (this._primePromise) return this._primePromise;
+
+      // Synchronous: ctx + node graph must be created in the calling
+      // gesture stack for iOS Safari to authorize the AudioContext.
+      if (!this.ctx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return Promise.resolve(false);
+        this.ctx = new Ctx();
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 256;
+        this.analyser.smoothingTimeConstant = 0.8;
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 1.0;
+        this.master.connect(this.analyser);
+        this.analyser.connect(this.ctx.destination);
+        // Stems bus: attenuate the 5-stem unity-sum (≈ -3.5 LUFS, clips at
+        // +8.4 dBFS) so it sits near B_dawn's -10.7 LUFS. BGMs bypass this
+        // and route to master at unity since they're already mastered tracks.
+        this.stemsBus = this.ctx.createGain();
+        this.stemsBus.gain.value = 0.50;
+        this.stemsBus.connect(this.master);
+        this.freqData = new Uint8Array(this.analyser.frequencyBinCount);
+        this.waveform.setAnalyser(this.analyser);
+
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: 'Original',
+            artist: 'NULL-N',
+            album: 'null-n.com',
+          });
+          navigator.mediaSession.setActionHandler('play', () => this.play());
+          navigator.mediaSession.setActionHandler('pause', () => this.pause());
+        }
+      }
+
+      // Async: decode every stem + BGM in parallel. Cached on the player so
+      // play() awaits the same promise regardless of when it's called.
+      this._primePromise = (async () => {
+        try {
+          if (this.stemBuffers.size === 0) {
+            if (this._stemArrayBuffers.size === 0) await this.readyPromise;
+            if (this._stemArrayBuffers.size > 0) {
+              await Promise.all(STEMS.map(async (s) => {
+                const ab = this._stemArrayBuffers.get(s.id);
+                if (!ab) return;
+                try {
+                  const buf = await this.ctx.decodeAudioData(ab);
+                  this.stemBuffers.set(s.id, buf);
+                } catch (e) {
+                  console.warn('Stem decode failed', s.id, e);
+                }
+              }));
+              this._stemArrayBuffers.clear();
+            }
+          }
+
+          if (this.bgmBuffers.size === 0 && this._bgmArrayBuffers.size > 0) {
+            await Promise.all(BGM_TRACKS.map(async (b) => {
+              const ab = this._bgmArrayBuffers.get(b.id);
+              if (!ab) return;
+              try {
+                const buf = await this.ctx.decodeAudioData(ab);
+                this.bgmBuffers.set(b.id, buf);
+              } catch (e) {
+                console.warn('BGM decode failed', b.id, e);
+              }
+            }));
+            this._bgmArrayBuffers.clear();
+          }
+          return true;
+        } catch (e) {
+          this._primePromise = null; // allow retry on next gesture
+          console.warn('Audio prime failed', e);
+          return false;
+        }
+      })();
+      return this._primePromise;
+    }
+
     async play() {
       if (this.playing) return;
       this.playing = true;
       try {
-        // --- sync portion (preserves user gesture) ---
-        if (!this.ctx) {
-          const Ctx = window.AudioContext || window.webkitAudioContext;
-          if (!Ctx) { this.playing = false; return; }
-          this.ctx = new Ctx();
-          this.analyser = this.ctx.createAnalyser();
-          this.analyser.fftSize = 256;
-          this.analyser.smoothingTimeConstant = 0.8;
-          this.master = this.ctx.createGain();
-          this.master.gain.value = 1.0;
-          this.master.connect(this.analyser);
-          this.analyser.connect(this.ctx.destination);
-          this.freqData = new Uint8Array(this.analyser.frequencyBinCount);
-          this.waveform.setAnalyser(this.analyser);
+        // _prime() is sync up to ctx creation, so calling it here keeps the
+        // user gesture intact even on iOS Safari. Decode is awaited but on a
+        // hot reload it's already done from the warmup gesture.
+        const ok = await this._prime();
+        if (!ok || !this.ctx || this.stemBuffers.size === 0) { this.playing = false; return; }
 
-          if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({
-              title: '17 — No AI. Just Music.',
-              artist: 'NULL-N',
-            });
-            navigator.mediaSession.setActionHandler('play', () => this.play());
-            navigator.mediaSession.setActionHandler('pause', () => this.pause());
-          }
-        }
-        const resumePromise = this.ctx.state === 'suspended' ? this.ctx.resume() : Promise.resolve();
-
-        // --- async portion ---
-        await resumePromise;
-
-        // Decode all stems on first play (after user gesture)
-        if (this.stemBuffers.size === 0) {
-          if (this._stemArrayBuffers.size === 0) await this.readyPromise;
-          if (this._stemArrayBuffers.size === 0) { this.playing = false; return; }
-          await Promise.all(STEMS.map(async (s) => {
-            const ab = this._stemArrayBuffers.get(s.id);
-            if (!ab) return;
-            try {
-              const buf = await this.ctx.decodeAudioData(ab);
-              this.stemBuffers.set(s.id, buf);
-            } catch (e) {
-              console.warn('Stem decode failed', s.id, e);
-            }
-          }));
-          this._stemArrayBuffers.clear();
+        if (this.ctx.state === 'suspended') {
+          try { await this.ctx.resume(); } catch (_) {}
         }
 
         // Schedule all sources to start at the same ctx time = sample-accurate sync
@@ -628,7 +728,7 @@
             src.loop = true;
             const gain = this.ctx.createGain();
             gain.gain.value = 1.0; // default = full original mix
-            src.connect(gain).connect(this.master);
+            src.connect(gain).connect(this.stemsBus);
             src.start(startAt);
             this.stemSources.set(s.id, src);
             this.stemGains.set(s.id, gain);
@@ -687,6 +787,73 @@
         g.gain.cancelScheduledValues(now);
         g.gain.setValueAtTime(v, now);
       }
+    }
+
+    /** Linear-ramp every stem gain to a single target value. Used to
+     * collectively duck/restore the stem mix when handing off to a
+     * standalone BGM (Scene B). Linear, so the timing is predictable
+     * and a follow-up fade can chain immediately after. */
+    fadeAllStems(target, ms = 200) {
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const dur = Math.max(0.001, ms / 1000);
+      for (const g of this.stemGains.values()) {
+        g.gain.cancelScheduledValues(now);
+        g.gain.setValueAtTime(g.gain.value, now);
+        g.gain.linearRampToValueAtTime(target, now + dur);
+      }
+    }
+
+    /** Start a standalone BGM track (looped) and fade its gain in.
+     * Idempotent — if the track is already playing this call is ignored.
+     * The track routes through the same master/analyser as the stems so
+     * the visualizer reads it.
+     *
+     * Fade shape is a quartic ease-out (1 − (1 − t)^4) instead of linear.
+     * A linear ramp from 0 leaves the first ~30% of the fade inaudible,
+     * which means the BGM's own intro plays during the silent portion and
+     * the listener "joins" the music mid-phrase. The ease-out reaches the
+     * audible threshold within ~10% of fadeMs (sample 0 of the buffer is
+     * heard from the listener's perspective) while still climbing slowly
+     * toward full volume — preserves the slow-emergence design intent. */
+    playBgm(id, { fadeMs = 200, volume = 1.0 } = {}) {
+      if (!this.ctx || this.bgmSources.get(id)) return;
+      const buf = this.bgmBuffers.get(id);
+      if (!buf || !this.master) return;
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(gain).connect(this.master);
+      src.start();
+      this.bgmSources.set(id, src);
+      this.bgmGains.set(id, gain);
+      const now = this.ctx.currentTime;
+      const dur = Math.max(0.001, fadeMs / 1000);
+      const N = 64;
+      const curve = new Float32Array(N);
+      for (let i = 0; i < N; i++) {
+        const t = i / (N - 1);
+        curve[i] = volume * (1 - Math.pow(1 - t, 4));
+      }
+      gain.gain.setValueCurveAtTime(curve, now, dur);
+    }
+
+    /** Fade a standalone BGM track out and clean up its nodes. */
+    stopBgm(id, { fadeMs = 200 } = {}) {
+      if (!this.ctx) return;
+      const src = this.bgmSources.get(id);
+      const gain = this.bgmGains.get(id);
+      if (!src || !gain) return;
+      const now = this.ctx.currentTime;
+      const dur = Math.max(0.001, fadeMs / 1000);
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.linearRampToValueAtTime(0, now + dur);
+      this.bgmSources.delete(id);
+      this.bgmGains.delete(id);
+      setTimeout(() => { try { src.stop(); } catch (_) {} }, fadeMs + 60);
     }
 
     async pause() {
@@ -858,6 +1025,10 @@
     // and any "negative space" between stars all play the song as composed.
     const STAR_NEAR = 0.10;   // within: pure Gaussian / isolation
     const STAR_FAR  = 0.28;   // beyond: full mix
+    // Underbed: when isolated near a star, far-side stems get clamped to this
+    // floor so the song still feels present instead of going single-track.
+    // 0.25 ≈ -12 dB underbed. Lower = more isolation, higher = more bed.
+    const ISOLATE_FLOOR = 0.25;
     const PLAYGROUND_REVEAL_DELAY = 1500;
 
     const root = document.getElementById('scene-a');
@@ -920,7 +1091,9 @@
       const visualWeights = {};
       for (const s of STEMS) {
         const gauss = Math.exp(-dist2[s.id] / (2 * SIGMA * SIGMA));
-        audioWeights[s.id]  = fullW + (1 - fullW) * gauss;
+        // Floor only the audio side; visuals keep full Gaussian falloff so
+        // distant nodes still dim crisply.
+        audioWeights[s.id]  = fullW + (1 - fullW) * Math.max(ISOLATE_FLOOR, gauss);
         visualWeights[s.id] = gauss;
       }
 
@@ -1072,6 +1245,192 @@
   }
 
   /* ============================================
+     SCENE B — formal "business" mode. Same composer, different room.
+     The cosmic shader fades out, the cursor returns to native, the page
+     becomes a calm white-on-light layout with serif headings. BGM keeps
+     playing because the audio graph is owned by App, not the scene.
+
+     Subtle audio reactivity — the footer cursor block and section dividers
+     breathe in time with the music — keeps it alive without ever shouting.
+     ============================================ */
+  function createSceneB({ audioPlayer }) {
+    // Atmospheric A → B transition (asymmetric):
+    //   stems duck to silence over 800ms → 300ms of breath → B fades in over 1500ms.
+    //   Reverse (B → A) is sharper at 300ms — silence yields, energy returns.
+    const STEM_DUCK_MS  = 800;
+    const BREATH_MS     = 300;
+    const BGM_FADEIN_MS = 1500;
+    const BGM_FADEOUT_MS = 300;
+    const STEM_RESTORE_MS = 300;
+
+    const root = document.getElementById('scene-b');
+    const docEl = document.documentElement;
+    const timeEl = document.getElementById('b-time');
+    const waveCanvas = document.getElementById('b-wave');
+    let unsubscribe = null;
+    let clockTimer = null;
+    let waveRaf = null;
+    let observer = null;
+    let waveCtx = null;
+    let waveData = null;
+    let bgmStarted = false;
+    let bgmStartTimer = null;
+
+    function updateClock() {
+      if (!timeEl) return;
+      const tokyoStr = new Date().toLocaleString('en-GB', {
+        timeZone: 'Asia/Tokyo',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      timeEl.textContent = tokyoStr;
+    }
+
+    // Sized lazily so iPhone Safari (URL-bar collapse, sticky reflow) and
+    // window resize don't leave the canvas with a stale internal buffer.
+    function ensureWaveSize() {
+      if (!waveCanvas) return false;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = waveCanvas.getBoundingClientRect();
+      const wPx = Math.round(Math.max(1, rect.width)  * dpr);
+      const hPx = Math.round(Math.max(1, rect.height) * dpr);
+      if (waveCanvas.width !== wPx || waveCanvas.height !== hPx) {
+        waveCanvas.width  = wPx;
+        waveCanvas.height = hPx;
+        waveCtx = waveCanvas.getContext('2d');
+        if (waveCtx) waveCtx.scale(dpr, dpr);
+      } else if (!waveCtx) {
+        waveCtx = waveCanvas.getContext('2d');
+        if (waveCtx) waveCtx.scale(dpr, dpr);
+      }
+      return !!waveCtx;
+    }
+
+    function drawWave() {
+      if (ensureWaveSize() && waveCanvas) {
+        const w = waveCanvas.clientWidth;
+        const h = waveCanvas.clientHeight;
+        waveCtx.clearRect(0, 0, w, h);
+        if (audioPlayer.analyser) {
+          if (!waveData || waveData.length !== audioPlayer.analyser.fftSize) {
+            waveData = new Uint8Array(audioPlayer.analyser.fftSize);
+          }
+          audioPlayer.analyser.getByteTimeDomainData(waveData);
+          waveCtx.beginPath();
+          waveCtx.lineWidth = 1;
+          waveCtx.strokeStyle = `rgba(30, 64, 175, ${audioPlayer.playing ? 0.55 : 0.12})`;
+          const slice = w / (waveData.length - 1);
+          for (let i = 0; i < waveData.length; i++) {
+            const v = (waveData[i] - 128) / 128;
+            const y = h / 2 + v * (h / 2 - 2);
+            const x = i * slice;
+            if (i === 0) waveCtx.moveTo(x, y);
+            else waveCtx.lineTo(x, y);
+          }
+          waveCtx.stroke();
+        } else {
+          waveCtx.beginPath();
+          waveCtx.lineWidth = 1;
+          waveCtx.strokeStyle = 'rgba(30, 64, 175, 0.12)';
+          waveCtx.moveTo(0, h / 2);
+          waveCtx.lineTo(w, h / 2);
+          waveCtx.stroke();
+        }
+      }
+      waveRaf = requestAnimationFrame(drawWave);
+    }
+
+    let waveResizeListener = null;
+
+    function setupObserver() {
+      if (!('IntersectionObserver' in window)) {
+        root.querySelectorAll('.b-service, .b-capabilities, .b-footer').forEach(el => el.classList.add('in-view'));
+        return;
+      }
+      observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) entry.target.classList.add('in-view');
+        });
+      }, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' });
+      root.querySelectorAll('.b-service, .b-capabilities, .b-footer').forEach(el => observer.observe(el));
+    }
+
+    function startBgmHandoff() {
+      if (bgmStarted) return;
+      bgmStarted = true;
+      audioPlayer.fadeAllStems(0, STEM_DUCK_MS);
+      bgmStartTimer = setTimeout(() => {
+        audioPlayer.playBgm('b', { fadeMs: BGM_FADEIN_MS, volume: 1.0 });
+        bgmStartTimer = null;
+      }, STEM_DUCK_MS + BREATH_MS);
+    }
+
+    return {
+      mount() {
+        root.removeAttribute('hidden');
+        audioPlayer.waveform.setTheme('light');
+
+        if (audioPlayer.playing) startBgmHandoff();
+
+        let wasPlaying = audioPlayer.playing;
+        unsubscribe = audioPlayer.subscribe(({ bass, mid }) => {
+          if (!wasPlaying && audioPlayer.playing) startBgmHandoff();
+          wasPlaying = audioPlayer.playing;
+
+          docEl.style.setProperty('--b-pulse', (0.3 + bass * 0.7).toFixed(2));
+          docEl.style.setProperty('--b-divider',
+            mid > 0.05
+              ? `rgba(10,10,15,${(0.06 + mid * 0.15).toFixed(3)})`
+              : '#e6e6ec');
+        });
+
+        updateClock();
+        clockTimer = setInterval(updateClock, 30000);
+
+        // Wait one frame so the canvas has a measured size before init.
+        requestAnimationFrame(() => {
+          drawWave();
+          setupObserver();
+        });
+
+        // Force re-size on viewport changes (iPhone URL bar collapse, rotate).
+        waveResizeListener = () => {
+          if (waveCanvas) waveCanvas.width = waveCanvas.height = 0; // invalidate
+          waveCtx = null;
+        };
+        window.addEventListener('resize', waveResizeListener, { passive: true });
+        window.addEventListener('orientationchange', waveResizeListener, { passive: true });
+      },
+      unmount() {
+        root.setAttribute('hidden', '');
+        audioPlayer.waveform.setTheme('dark');
+        unsubscribe?.(); unsubscribe = null;
+        docEl.style.removeProperty('--b-pulse');
+        docEl.style.removeProperty('--b-divider');
+
+        if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+        if (waveRaf) { cancelAnimationFrame(waveRaf); waveRaf = null; }
+        if (observer) { observer.disconnect(); observer = null; }
+        if (bgmStartTimer) { clearTimeout(bgmStartTimer); bgmStartTimer = null; }
+        if (waveResizeListener) {
+          window.removeEventListener('resize', waveResizeListener);
+          window.removeEventListener('orientationchange', waveResizeListener);
+          waveResizeListener = null;
+        }
+        root.querySelectorAll('.in-view').forEach(el => el.classList.remove('in-view'));
+
+        // Reverse the handoff: cut B, restore stems.
+        if (bgmStarted) {
+          audioPlayer.stopBgm('b', { fadeMs: BGM_FADEOUT_MS });
+          audioPlayer.fadeAllStems(1, STEM_RESTORE_MS);
+        }
+        bgmStarted = false;
+      }
+    };
+  }
+
+  /* ============================================
      APP
      ============================================ */
   class App {
@@ -1103,8 +1462,10 @@
 
       this.scenes = new SceneManager({ audioPlayer: this.audioPlayer });
       this.scenes.register('a', createSceneA);
+      this.scenes.register('b', createSceneB);
       this.scenes.bind();
-      this.scenes.show('a', { skipUrl: true });
+      const initial = new URLSearchParams(location.search).get('scene') === 'b' ? 'b' : 'a';
+      this.scenes.show(initial, { skipUrl: true });
     }
   }
 
