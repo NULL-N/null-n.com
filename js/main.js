@@ -663,24 +663,31 @@
       // play() awaits the same promise regardless of when it's called.
       this._primePromise = (async () => {
         try {
-          if (this.stemBuffers.size === 0) {
+          // Decode stems and BGMs in parallel — slower (Windows) FLAC decoders
+          // serialize the BGM well behind the stems otherwise, and a fast
+          // A→B scene switch lands during the BGM-decode window with the
+          // visitor stranded in ducked silence.
+          const decodeStems = (async () => {
+            if (this.stemBuffers.size > 0) return;
             if (this._stemArrayBuffers.size === 0) await this.readyPromise;
-            if (this._stemArrayBuffers.size > 0) {
-              await Promise.all(STEMS.map(async (s) => {
-                const ab = this._stemArrayBuffers.get(s.id);
-                if (!ab) return;
-                try {
-                  const buf = await this.ctx.decodeAudioData(ab);
-                  this.stemBuffers.set(s.id, buf);
-                } catch (e) {
-                  console.warn('Stem decode failed', s.id, e);
-                }
-              }));
-              this._stemArrayBuffers.clear();
-            }
-          }
+            if (this._stemArrayBuffers.size === 0) return;
+            await Promise.all(STEMS.map(async (s) => {
+              const ab = this._stemArrayBuffers.get(s.id);
+              if (!ab) return;
+              try {
+                const buf = await this.ctx.decodeAudioData(ab);
+                this.stemBuffers.set(s.id, buf);
+              } catch (e) {
+                console.warn('Stem decode failed', s.id, e);
+              }
+            }));
+            this._stemArrayBuffers.clear();
+          })();
 
-          if (this.bgmBuffers.size === 0 && this._bgmArrayBuffers.size > 0) {
+          const decodeBgms = (async () => {
+            if (this.bgmBuffers.size > 0) return;
+            if (this._bgmArrayBuffers.size === 0) await this.readyPromise;
+            if (this._bgmArrayBuffers.size === 0) return;
             await Promise.all(BGM_TRACKS.map(async (b) => {
               const ab = this._bgmArrayBuffers.get(b.id);
               if (!ab) return;
@@ -692,7 +699,9 @@
               }
             }));
             this._bgmArrayBuffers.clear();
-          }
+          })();
+
+          await Promise.all([decodeStems, decodeBgms]);
           return true;
         } catch (e) {
           this._primePromise = null; // allow retry on next gesture
@@ -1360,9 +1369,18 @@
       if (bgmStarted) return;
       bgmStarted = true;
       audioPlayer.fadeAllStems(0, STEM_DUCK_MS);
-      bgmStartTimer = setTimeout(() => {
-        audioPlayer.playBgm('b', { fadeMs: BGM_FADEIN_MS, volume: 1.0 });
+      bgmStartTimer = setTimeout(async () => {
         bgmStartTimer = null;
+        // Slower (Windows) FLAC decoders can still be working on B_dawn when
+        // the breath ends. Without this guard playBgm silently no-ops because
+        // bgmBuffers.get('b') is undefined, leaving the visitor in dead air.
+        if (!audioPlayer.bgmBuffers.has('b')) {
+          try { await audioPlayer._prime(); } catch (_) {}
+        }
+        // unmount() flips bgmStarted to false; if the visitor already
+        // returned to A while we were waiting on decode, abort.
+        if (!bgmStarted) return;
+        audioPlayer.playBgm('b', { fadeMs: BGM_FADEIN_MS, volume: 1.0 });
       }, STEM_DUCK_MS + BREATH_MS);
     }
 
