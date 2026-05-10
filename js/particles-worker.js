@@ -97,7 +97,7 @@ void main() {
 
     // Boundary jitter — breaks the constant-RGB strips that smoothstep
     // emits at fixed thresholds, where Windows displays show banding.
-    float bj = (hash(uv * 200.0) - 0.5) * 0.015;
+    float bj = (hash(uv * 200.0) - 0.5) * 0.018;
     col = mix(col, vec3(0.0, 0.12, 0.08),  smoothstep(0.0, 0.4, f2 + bj));
     col = mix(col, vec3(0.1, 0.08, 0.28),  smoothstep(0.2, 0.6, f2 + bj));
 
@@ -162,11 +162,13 @@ void main() {
     float energy = (uBass + uMid + uHigh) * 0.333;
     col *= clamp(1.0 - dot(p * (0.55 - energy * 0.05), p * (0.55 - energy * 0.05)), 0.0, 1.0);
 
-    // ---- Final dither (IGN, ±4/255) ----
-    // Interleaved gradient noise distributes quantization error across
-    // an animated structured pattern. The visual grain stays minimal
-    // while smooth gradients lose their 8-bit stepping entirely.
-    col += (ign(gl_FragCoord.xy + fract(uTime) * 50.0) - 0.5) * (8.0 / 255.0);
+    // ---- Final dither (per-channel IGN, ±5/255) ----
+    // Independent noise per channel breaks the cross-channel banding
+    // patterns that 6-bit + FRC Windows panels surface. On 8-bit/HDR
+    // Mac/iOS displays it stays imperceptible — magnitude is tiny.
+    vec2 fc = gl_FragCoord.xy + fract(uTime) * 50.0;
+    vec3 d3 = vec3(ign(fc), ign(fc + 17.0), ign(fc + 41.0));
+    col += (d3 - 0.5) * (10.0 / 255.0);
 
     gl_FragColor = vec4(max(col, 0.0), 1.0);
 }
