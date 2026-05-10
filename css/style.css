@@ -1,0 +1,446 @@
+/* ============================================
+   NULL-N
+   - @property (typed custom properties)
+   - text-wrap: balance
+   - contain (layout isolation)
+   - linear() easing (spring physics)
+   ============================================ */
+
+/* ---------- CUSTOM PROPERTIES ---------- */
+:root {
+  --bg-primary: #0a0a0f;
+  --text-primary: #e4e4ee;
+  --text-secondary: #6a6a8e;
+  --accent-1: #00ffaa;
+  --accent-3: #ff3366;
+  --font-hero: 'Syne', 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---------- RESET ---------- */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html {
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar { display: none; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  cursor: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+button { cursor: none; }
+::selection { background: var(--accent-1); color: var(--bg-primary); }
+
+/* ---------- CURSOR — GPU layer via will-change + contain ---------- */
+.cursor-dot {
+  position: fixed; top: 0; left: 0;
+  width: 6px; height: 6px;
+  background: var(--accent-1);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 100000;
+  transform: translate(-50%, -50%);
+  transition: width 0.2s, height 0.2s, background 0.2s;
+  mix-blend-mode: difference;
+  will-change: transform;
+  contain: layout style;
+}
+.cursor-ring {
+  position: fixed; top: 0; left: 0;
+  width: 36px; height: 36px;
+  border: 1.5px solid rgba(0, 255, 170, 0.4);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 99999;
+  transform: translate(-50%, -50%);
+  transition: width 0.3s var(--ease-out-expo), height 0.3s var(--ease-out-expo),
+              border-color 0.3s, background 0.2s;
+  will-change: transform;
+  contain: layout style;
+}
+.cursor-dot.hovering { width: 12px; height: 12px; background: var(--accent-3); }
+.cursor-ring.hovering {
+  width: 56px; height: 56px;
+  border-color: rgba(255, 51, 102, 0.3);
+  background: rgba(255, 51, 102, 0.05);
+}
+
+/* ---------- AUDIO CONTROL — waveform visualizer ---------- */
+.audio-ctrl {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  bottom: max(2rem, env(safe-area-inset-bottom));
+  right: max(2rem, env(safe-area-inset-right));
+  z-index: 6000;
+  background: none;
+  border: none;
+  padding: 6px;
+  cursor: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+.audio-ctrl.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.audio-wave {
+  display: block;
+  width: 96px;
+  height: 96px;
+}
+
+
+/* ---------- NOISE OVERLAY ---------- */
+.noise-svg {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 8000;
+  opacity: 0.025;
+}
+
+/* ---------- CANVAS ---------- */
+#bg-canvas {
+  position: fixed;
+  top: calc(-1 * env(safe-area-inset-top, 0px));
+  left: calc(-1 * env(safe-area-inset-left, 0px));
+  width: calc(100% + env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px));
+  height: calc(100% + env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px));
+  z-index: 0;
+}
+
+/* ---------- SECTION BASE ---------- */
+.section {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- HERO ---------- */
+.hero { height: 100dvh; height: 100vh; flex-direction: column; min-height: 0; }
+@supports (height: 100dvh) { .hero { height: 100dvh; } }
+.hero-content { text-align: center; z-index: 2; }
+.hero-title {
+  font-family: var(--font-hero);
+  font-size: clamp(4rem, 12vw, 10rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: var(--text-primary);
+  position: relative;
+  opacity: 0;
+  transform: translateY(30px);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Glitch — color layers disabled globally (clip-path interpolation rendered as
+   solid red/green flicker on Windows Chrome and iOS Safari instead of a glitch).
+   Skew animation alone keeps the title alive without cross-browser hazards. */
+.glitch { animation: glitch-skew 4s infinite linear alternate-reverse; }
+.glitch::before, .glitch::after { display: none; }
+
+.hero-prompt {
+  font-family: var(--font-mono);
+  font-size: clamp(0.6rem, 2.6vw, 1.2rem);
+  color: var(--text-secondary);
+  margin-top: 2rem;
+  padding: 0 1rem;
+  opacity: 0;
+  transform: translateY(20px);
+  white-space: nowrap;
+}
+.prompt-symbol { color: var(--accent-1); margin-right: 0.5em; }
+.prompt-cursor { display: inline-block; animation: blink 1s step-end infinite; color: var(--accent-1); }
+
+/* ---------- GITHUB LINK ---------- */
+.github-link {
+  position: fixed;
+  bottom: 2rem;
+  left: 2rem;
+  bottom: max(2rem, env(safe-area-inset-bottom));
+  left: max(2rem, env(safe-area-inset-left));
+  z-index: 6000;
+  color: var(--text-secondary);
+  opacity: 0.4;
+  transition: opacity 0.3s, color 0.3s;
+}
+.github-link:hover {
+  opacity: 1;
+  color: var(--accent-1);
+}
+
+/* ============================================
+   KEYFRAMES
+   ============================================ */
+@keyframes glitch-1 {
+  0%   { clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%); transform: translate(-3px, -1px); }
+  20%  { clip-path: polygon(0 15%, 100% 15%, 100% 55%, 0 55%); transform: translate(3px, 1px); }
+  40%  { clip-path: polygon(0 40%, 100% 40%, 100% 70%, 0 70%); transform: translate(-2px, -1px); }
+  60%  { clip-path: polygon(0 60%, 100% 60%, 100% 85%, 0 85%); transform: translate(2px, 0); }
+  80%  { clip-path: polygon(0 5%, 100% 5%, 100% 25%, 0 25%); transform: translate(-1px, 2px); }
+  100% { clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%); transform: translate(0); }
+}
+@keyframes glitch-2 {
+  0%   { clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%); transform: translate(3px, 1px); }
+  20%  { clip-path: polygon(0 45%, 100% 45%, 100% 80%, 0 80%); transform: translate(-3px, -1px); }
+  40%  { clip-path: polygon(0 70%, 100% 70%, 100% 95%, 0 95%); transform: translate(2px, 1px); }
+  60%  { clip-path: polygon(0 20%, 100% 20%, 100% 50%, 0 50%); transform: translate(-2px, 0); }
+  80%  { clip-path: polygon(0 75%, 100% 75%, 100% 100%, 0 100%); transform: translate(1px, -2px); }
+  100% { clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%); transform: translate(0); }
+}
+@keyframes glitch-skew {
+  0%   { transform: skew(0deg); }
+  2%   { transform: skew(0.4deg); }
+  4%   { transform: skew(-0.2deg); }
+  6%   { transform: skew(0deg); }
+  100% { transform: skew(0deg); }
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+/* ---------- TOUCH DEVICES ---------- */
+@media (hover: none) {
+  .cursor-dot, .cursor-ring { display: none; }
+  body { cursor: auto; }
+  button { cursor: pointer; }
+  .glitch { animation: none; }
+  .glitch::before, .glitch::after { display: none; }
+  .hero { padding-bottom: 8vh; }
+}
+
+/* ---------- MOBILE ---------- */
+@media (max-width: 768px) {
+  .audio-ctrl { bottom: 1.5rem; right: 1.5rem; }
+  .audio-wave { width: 76px; height: 76px; }
+}
+
+@media (max-width: 480px) {
+  .hero-title { font-size: clamp(2.8rem, 14vw, 4.5rem); }
+  .hero-prompt { margin-top: 1.5rem; }
+}
+
+/* ---------- LANDSCAPE MOBILE ---------- */
+@media (max-height: 480px) and (orientation: landscape) {
+  .hero-title  { font-size: clamp(3rem, 16vh, 8rem); }
+  .hero-prompt { font-size: clamp(0.6rem, 2.6vh, 1rem); margin-top: 0.75rem; }
+  .audio-ctrl  { bottom: 1rem; right: 1rem; }
+  .audio-wave  { width: 56px; height: 56px; }
+  .github-link { bottom: 1rem; left: 1rem; }
+}
+
+/* ---------- REDUCED MOTION ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    animation-timeline: auto !important;
+  }
+  html { scroll-behavior: auto; }
+  .glitch::before, .glitch::after { display: none; }
+}
+
+/* ============================================
+   PAGE STATE — single scene with progressive playground reveal.
+   `body.playground-on` flips on after the visitor's first interaction:
+   stars fade in, cursor begins sculpting the mix, the lock pip surfaces.
+   ============================================ */
+
+.scene { display: block; }
+
+/* When the playground turns on, swap the custom cursor for a crosshair
+   so the visitor's cursor visibly belongs to the playing field. */
+body.playground-on { cursor: crosshair; }
+body.playground-on .cursor-dot,
+body.playground-on .cursor-ring { display: none; }
+
+/* ============================================
+   PLAYGROUND — five stem stars + crosshair + lock marker. Lives inside
+   the same scene as the hero (no page split). Stars are hidden until
+   `body.playground-on` is set, after which they fade in and respond
+   to cursor proximity (--w) and audio activity (--a).
+   ============================================ */
+
+/* Stem nodes — STARS. Each is a near-white pinpoint with two layers of
+   halo, four-pointed diffraction spikes that grow with weight, and a
+   pulse whose amplitude is driven by --a (audio usage). At rest stars
+   merely twinkle like a backdrop; when actively contributing to the
+   mix they breathe / shine visibly. Each star has its own phase via
+   per-id animation-delay below. */
+@keyframes b-twinkle {
+  0%, 100% { filter: brightness(calc(0.9  - var(--a, 0) * 0.1)); }
+  40%      { filter: brightness(calc(1.05 + var(--a, 0) * 0.6)); }
+  70%      { filter: brightness(calc(0.85 - var(--a, 0) * 0.2)); }
+}
+
+.b-node {
+  position: fixed;
+  width: 1.5px; height: 1.5px;
+  margin: -0.75px 0 0 -0.75px;
+  border-radius: 50%;
+  background: currentColor;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  box-shadow:
+    0 0 calc(0.5px + var(--w, 0) * 3px) currentColor,
+    0 0 calc(2px   + var(--w, 0) * 10px) currentColor,
+    0 0 calc(6px   + var(--w, 0) * 24px) currentColor;
+  opacity: 0; /* hidden until playground reveal */
+  transition: box-shadow 0.05s linear;
+}
+
+@keyframes b-reveal {
+  from { opacity: 0; }
+  to   { opacity: calc(0.35 + var(--w, 0) * 0.6); }
+}
+
+/* Diffraction spikes appear only when the star is genuinely "near" the
+   cursor — quadratic in --w so distant stars stay pinpoints.  At full
+   weight they extend like a long-exposure photograph but never engulf
+   the screen. */
+.b-node::before,
+.b-node::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  filter: blur(0.5px);
+  pointer-events: none;
+  opacity: calc(var(--w, 0) * var(--w, 0) * 0.85);
+  transition: opacity 0.06s linear, width 0.06s linear, height 0.06s linear;
+}
+.b-node::before {
+  width: calc(var(--w, 0) * var(--w, 0) * 60px);
+  height: 1px;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(90deg,
+    transparent 0%,
+    currentColor 30%,
+    currentColor 70%,
+    transparent 100%);
+}
+.b-node::after {
+  width: 1px;
+  height: calc(var(--w, 0) * var(--w, 0) * 60px);
+  transform: translate(-50%, -50%);
+  background: linear-gradient(0deg,
+    transparent 0%,
+    currentColor 30%,
+    currentColor 70%,
+    transparent 100%);
+}
+
+/* Stars come alive only when the playground turns on. Two animations per
+   star: a one-shot reveal (forwards holds the final calc-driven opacity
+   so cursor reactions still apply) and the perpetual twinkle whose
+   amplitude is driven by --a (audio activity). Per-id timing keeps each
+   star out of sync — atmospheric, like real twinkling. */
+body.playground-on #node-drums     { animation: b-reveal 1.5s ease forwards 0s,    b-twinkle 4.2s ease-in-out infinite     0s; }
+body.playground-on #node-bass      { animation: b-reveal 1.5s ease forwards 0.2s, b-twinkle 5.7s ease-in-out infinite    -1.3s; }
+body.playground-on #node-main-gt   { animation: b-reveal 1.5s ease forwards 0.4s, b-twinkle 6.4s ease-in-out infinite    -3.1s; }
+body.playground-on #node-synth-gt  { animation: b-reveal 1.5s ease forwards 0.6s, b-twinkle 4.9s ease-in-out infinite    -2.4s; }
+body.playground-on #node-synth-pad { animation: b-reveal 1.5s ease forwards 0.8s, b-twinkle 5.3s ease-in-out infinite    -4.0s; }
+
+/* (Stem labels removed — discovery is the experience itself.) */
+
+/* Lock marker — placed at the cursor position when visitor commits to
+   a balance (click). NULL-N's accent green, so the chosen point is
+   "branded" to him. Stays put while locked; fades on unlock. */
+.b-lock-marker {
+  position: fixed;
+  top: 0; left: 0;
+  width: 2.5px; height: 2.5px;
+  margin: -1.25px 0 0 -1.25px;
+  border-radius: 50%;
+  background: #00ffaa;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  box-shadow:
+    0 0 4px   #00ffaa,
+    0 0 16px  #00ffaa,
+    0 0 50px  rgba(0, 255, 170, 0.55);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  z-index: 6800;
+}
+body.locked .b-lock-marker { opacity: 1; }
+.b-lock-marker::before,
+.b-lock-marker::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  filter: blur(0.5px);
+  background: linear-gradient(90deg,
+    transparent 0%, #00ffaa 30%, #00ffaa 70%, transparent 100%);
+  opacity: 0.85;
+}
+.b-lock-marker::before {
+  width: 90px; height: 1px;
+  transform: translate(-50%, -50%);
+}
+.b-lock-marker::after {
+  width: 1px; height: 90px;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(0deg,
+    transparent 0%, #00ffaa 30%, #00ffaa 70%, transparent 100%);
+}
+
+/* Crosshair following cursor — invisible until playground reveals. */
+.b-crosshair {
+  position: fixed;
+  width: 32px; height: 32px;
+  margin: -16px 0 0 -16px;
+  border: 1px solid rgba(255,255,255,0.55);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 6500;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+body.playground-on .b-crosshair { opacity: 1; }
+.b-crosshair::before, .b-crosshair::after {
+  content: '';
+  position: absolute;
+  background: rgba(255,255,255,0.4);
+}
+.b-crosshair::before { top: 50%; left: -8px; right: -8px; height: 1px; }
+.b-crosshair::after  { left: 50%; top: -8px; bottom: -8px; width: 1px; }
+
+/* Locked: dashed crosshair, brighter */
+body.locked .b-crosshair {
+  border-style: dashed;
+  border-color: rgba(255,255,255,0.85);
+}
+body.locked .b-crosshair::before,
+body.locked .b-crosshair::after {
+  background: rgba(255,255,255,0.7);
+}
+
+/* Device gate — playground belongs to precise-pointer devices.
+   Touch / stylus / coarse-pointer (phone, tablet without mouse) gets the
+   hero + BGM only; constellation, crosshair, lock marker stay hidden. */
+@media not all and (hover: hover) and (pointer: fine) {
+  .b-node,
+  .b-crosshair,
+  .b-lock-marker {
+    display: none;
+  }
+}

@@ -1,0 +1,19 @@
+.DS_Store
+
+# Audio masters — never publish to the public repo.
+# Production stems are served from Cloudflare R2 via Pages Functions,
+# not from the static deploy. WAV/FLAC stay local-only.
+stems/*.wav
+stems/*.flac
+stems/*.aif
+stems/*.aiff
+# Cover image used as embedded metadata in stems
+stems/img.png
+stems/cover.*
+
+# Sandbox / experiment HTML files — local dev only, never publish.
+cursor-demo.html
+stem-sandbox.html
+
+# Public-mp3 leak removed; never re-track full-mix exports.
+music/*.mp3

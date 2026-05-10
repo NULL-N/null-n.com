@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>NULL-N | Art × AI × Engineering</title>
+  <meta name="description" content="NULL-N — Art × AI × Engineering の交差点で創造するエンジニアのポートフォリオ。">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+  <meta name="theme-color" content="#0a0a0f">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="https://null-n.com/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="NULL-N">
+  <meta property="og:title" content="NULL-N | Art × AI × Engineering">
+  <meta property="og:description" content="Art × AI × Engineering の交差点で創造するエンジニアのポートフォリオ。">
+  <meta property="og:url" content="https://null-n.com/">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:image" content="https://null-n.com/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+
+  <!-- X / Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="NULL-N | Art × AI × Engineering">
+  <meta name="twitter:description" content="Art × AI × Engineering の交差点で創造するエンジニアのポートフォリオ。">
+  <meta name="twitter:image" content="https://null-n.com/og-image.png">
+
+  <!-- Favicon & Icons -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90' font-family='monospace' fill='%2300ffaa'%3EN%3C/text%3E%3C/svg%3E">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&display=swap" as="style">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Noto+Serif+JP:wght@500;700&family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Structured Data (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    "mainEntity": {
+      "@type": "Person",
+      "name": "NULL-N",
+      "url": "https://null-n.com",
+      "sameAs": [
+        "https://github.com/NULL-N"
+      ],
+      "knowsAbout": ["Art", "Artificial Intelligence", "Software Engineering"],
+      "jobTitle": "Engineer"
+    },
+    "dateModified": "2026-05-09"
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ========== CURSOR ========== -->
+  <div class="cursor-dot" aria-hidden="true"></div>
+  <div class="cursor-ring" aria-hidden="true"></div>
+
+  <!-- ========== NOISE OVERLAY ========== -->
+  <svg class="noise-svg" aria-hidden="true">
+    <filter id="noiseFilter">
+      <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/>
+    </filter>
+    <rect width="100%" height="100%" filter="url(#noiseFilter)"/>
+  </svg>
+
+  <!-- ========== AUDIO ========== -->
+  <audio id="bg-music" preload="none">
+    <source src="music/3 minute Made ©Null-N.mp3" type="audio/mpeg">
+  </audio>
+  <button class="audio-ctrl" id="audio-btn" aria-label="Toggle music" data-magnetic data-no-scene-tap>
+    <canvas class="audio-wave" id="audio-wave"></canvas>
+  </button>
+
+  <!-- ========== CANVAS ========== -->
+  <canvas id="bg-canvas" aria-hidden="true"></canvas>
+
+  <!-- ========== MAIN — single page; playground reveals after first interaction ========== -->
+  <main class="scene scene-a" id="scene-a">
+    <section id="hero" class="section hero">
+      <div class="hero-content">
+        <h1 class="hero-title glitch" data-text="NULL-N">NULL-N</h1>
+        <div class="hero-prompt">
+          <span class="prompt-symbol">&gt;</span>
+          <span class="prompt-text" id="typed-text"></span>
+          <span class="prompt-cursor">_</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Playground constellation — initially invisible, revealed after the
+         visitor's first interaction (audio engages and stars fade in). -->
+    <div class="b-node" id="node-drums"     style="color:#fff0e0"></div>
+    <div class="b-node" id="node-bass"      style="color:#e0e8ff"></div>
+    <div class="b-node" id="node-main-gt"   style="color:#fff5d8"></div>
+    <div class="b-node" id="node-synth-gt"  style="color:#e8f8ec"></div>
+    <div class="b-node" id="node-synth-pad" style="color:#f0e0f8"></div>
+
+    <div class="b-crosshair" aria-hidden="true"></div>
+    <div class="b-lock-marker" aria-hidden="true"></div>
+
+    <a href="https://github.com/NULL-N" class="github-link" target="_blank" rel="noopener" aria-label="GitHub" data-magnetic data-no-scene-tap>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+    </a>
+  </main>
+
+  <!-- ========== NOSCRIPT ========== -->
+  <noscript>
+    <style>.hero-title{opacity:1;transform:none}.hero-prompt{opacity:1;transform:none}.prompt-cursor{animation:none}</style>
+  </noscript>
+
+  <!-- ========== SCRIPTS ========== -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="js/main.js" defer></script>
+</body>
+</html>
